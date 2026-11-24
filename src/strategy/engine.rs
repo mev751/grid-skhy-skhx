@@ -141,16 +141,25 @@ impl GridEngine {
         if st_snapshot.positions_held < st_snapshot.max_grids {
             let next_entry_k = self.config.p1 + (st_snapshot.positions_held as f64) * self.config.step_x;
             if k_use >= next_entry_k {
-                // Check margin
+                // Check margin: only evaluate if on-chain equity data has been synchronized
                 let required_margin = (self.config.q_usdc * 2.0) / (self.config.leverage as f64);
-                if self.config.is_live_trading() && equity_state.withdrawable_margin < required_margin {
-                    let mut st = self.stats.write().await;
-                    st.max_grids = st.positions_held;
-                    self.add_log(format!(
-                        "[⚠️ 保证金不足] 可用 {:.2} < 所需 {:.2}，锁定 [第 {} 层] 为上限！",
-                        equity_state.withdrawable_margin, required_margin, st.positions_held
-                    ))
-                    .await;
+                let has_synced_equity = equity_state.spot_usdc > 0.0
+                    || equity_state.account_value > 0.0
+                    || equity_state.withdrawable_margin > 0.0;
+
+                if self.config.is_live_trading() && has_synced_equity {
+                    if equity_state.withdrawable_margin < required_margin {
+                        let mut st = self.stats.write().await;
+                        st.max_grids = st.positions_held;
+                        self.add_log(format!(
+                            "[⚠️ 保证金不足] 可用 {:.2} < 所需 {:.2}，锁定 [第 {} 层] 为上限！",
+                            equity_state.withdrawable_margin, required_margin, st.positions_held
+                        ))
+                        .await;
+                        return;
+                    }
+                } else if self.config.is_live_trading() && !has_synced_equity {
+                    // Waiting for initial equity data to be retrieved, do not lock max_grids to 0!
                     return;
                 }
 

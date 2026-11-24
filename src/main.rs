@@ -82,6 +82,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default()
         .as_millis() as u64;
 
+    // 5.1 Synchronously fetch initial account equity before starting tickers!
+    if !wallet_addr.is_empty() {
+        println!("正在同步主钱包账户资产与可用保证金: {}...", wallet_addr);
+        if let Ok(st) = info_client.fetch_account_state(&wallet_addr).await {
+            println!(
+                "账户资产同步成功: 总净值={:.2}, 可用保证金={:.2}, Spot USDC={:.2}",
+                st.account_value, st.withdrawable_margin, st.spot_usdc
+            );
+            let mut eq = equity_state.write().await;
+            *eq = st;
+        }
+    } else {
+        println!("[⚠️ 警告] 未配置主钱包地址 wallet_addr！若使用 API 钱包，请在 config.toml 或环境变量 HL_WALLET_ADDR 中配置主钱包地址！");
+    }
+
     // 6. Background account equity tracking
     if !wallet_addr.is_empty() {
         let info_clone = info_client.clone();
