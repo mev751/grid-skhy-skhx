@@ -1,0 +1,6 @@
+/target
+/rust-toolchain.toml
+/.cargo
+*.log
+.env*
+.DS_Store

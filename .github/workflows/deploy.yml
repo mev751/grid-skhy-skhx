@@ -1,0 +1,79 @@
+name: Build and Deploy to Box Server
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build Linux AMD64 Release Binary
+        run: cargo build --release
+
+      - name: Verify Binary
+        run: |
+          file target/release/grid-skhy-skhx
+          ls -lh target/release/grid-skhy-skhx
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grid-skhy-skhx-linux-amd64
+          path: target/release/grid-skhy-skhx
+
+      - name: Deploy to Box Server via SCP
+        if: env.BOX_HOST != ''
+        env:
+          BOX_HOST: ${{ secrets.BOX_HOST }}
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.BOX_HOST }}
+          username: ${{ secrets.BOX_USER || 'emc' }}
+          key: ${{ secrets.BOX_SSH_KEY }}
+          passphrase: ${{ secrets.BOX_SSH_PASSPHRASE || '' }}
+          port: ${{ secrets.BOX_PORT || 22 }}
+          source: "target/release/grid-skhy-skhx"
+          target: "/home/emc/grid-skhy-skhx"
+          strip_components: 2
+
+      - name: Set Permissions on Box Server
+        if: env.BOX_HOST != ''
+        env:
+          BOX_HOST: ${{ secrets.BOX_HOST }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BOX_HOST }}
+          username: ${{ secrets.BOX_USER || 'emc' }}
+          key: ${{ secrets.BOX_SSH_KEY }}
+          passphrase: ${{ secrets.BOX_SSH_PASSPHRASE || '' }}
+          port: ${{ secrets.BOX_PORT || 22 }}
+          script: |
+            mkdir -p /home/emc/grid-skhy-skhx
+            chmod +x /home/emc/grid-skhy-skhx/grid-skhy-skhx
+            echo "Successfully deployed binary:"
+            ls -la /home/emc/grid-skhy-skhx/grid-skhy-skhx
