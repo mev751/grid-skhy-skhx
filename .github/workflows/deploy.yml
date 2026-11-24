@@ -3,7 +3,11 @@ name: Build and Deploy to Box Server
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -45,6 +49,17 @@ jobs:
         with:
           name: grid-skhy-skhx-linux-amd64
           path: target/release/grid-skhy-skhx
+
+      - name: Release Latest Binary
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: latest
+          name: "Latest Release (Linux AMD64)"
+          prerelease: false
+          files: target/release/grid-skhy-skhx
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Box Server via SCP
         if: env.BOX_HOST != ''
