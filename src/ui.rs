@@ -2,6 +2,19 @@ use crate::config::AppConfig;
 use crate::hyperliquid::info::{AccountEquityState, TradeHistoryStats};
 use crate::hyperliquid::ws::MarketPrices;
 use crate::strategy::engine::EngineStats;
+use std::io::Write;
+
+pub fn init_terminal() {
+    // Hide cursor and clear once on start
+    print!("\x1B[?25l\x1B[2J\x1B[H");
+    let _ = std::io::stdout().flush();
+}
+
+pub fn restore_terminal() {
+    // Show cursor on exit
+    print!("\x1B[?25h\n");
+    let _ = std::io::stdout().flush();
+}
 
 pub fn format_runtime_str(total_seconds: u64) -> String {
     let days = total_seconds / 86400;
@@ -158,7 +171,7 @@ pub fn render_dashboard(
     }
     screen.push(format!("  {}", line_dash));
 
-    screen.push("  [ 行情盘口与策略状态 ]".to_string());
+    screen.push("  [ 行情盘口与策略状态 (配置文件: config.toml) ]".to_string());
     screen.push(format!(
         "  # SKHY-USDC    : 买1={}  | 卖1={}",
         p_hy_bid_str, p_hy_ask_str
@@ -196,7 +209,19 @@ pub fn render_dashboard(
     screen.push(format!("  {}", line_equal));
     screen.push("  [Ctrl+C 退出程序]\n".to_string());
 
-    // Clear terminal screen and print
-    print!("\x1B[2J\x1B[1;1H");
-    println!("{}", screen.join("\n"));
+    // Flicker-free update: move cursor home (\x1B[H) and overwrite in-place
+    // Each line has \x1B[K to clear old characters to the right
+    let mut buffer = String::with_capacity(4096);
+    buffer.push_str("\x1B[H");
+
+    for line in screen {
+        buffer.push_str(&line);
+        buffer.push_str("\x1B[K\n");
+    }
+    buffer.push_str("\x1B[J"); // Clear any leftover lines at bottom
+
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    let _ = handle.write_all(buffer.as_bytes());
+    let _ = handle.flush();
 }

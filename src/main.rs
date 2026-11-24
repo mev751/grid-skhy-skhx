@@ -16,7 +16,7 @@ use tokio::time::{sleep, Duration, Instant};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = AppConfig::from_env();
+    let config = AppConfig::load();
 
     println!("正在唤醒单向做空网格对冲结算系统 (Rust v3.8)...");
 
@@ -137,11 +137,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // 8. Main UI loop
+    ui::init_terminal();
     let start_instant = Instant::now();
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("\n已安全退出自动交易守护进程。");
+                ui::restore_terminal();
+                println!("已安全退出自动交易守护进程。");
                 break;
             }
             _ = sleep(Duration::from_millis(300)) => {
@@ -160,6 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    ui::restore_terminal();
     ws_manager.stop();
     Ok(())
 }
